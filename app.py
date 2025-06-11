@@ -47,7 +47,18 @@ def analyze_stock(sym):
     df["EMA50"] = df["Close"].ewm(50).mean()
     df["EMA200"] = df["Close"].ewm(200).mean()
     df["High20max"] = df["High"].rolling(20).max()
-    ema_ok = df["Close"].iloc[-1]>df["EMA20"].iloc[-1]>df["EMA50"].iloc[-1]>df["EMA200"].iloc[-1]
+   required_cols = ["EMA20", "EMA50", "EMA200", "Close"]
+if not all(col in df.columns for col in required_cols):
+    return None  # Skip this stock
+
+try:
+    ema_ok = (
+        df["Close"].iloc[-1] > df["EMA20"].iloc[-1] > df["EMA50"].iloc[-1] > df["EMA200"].iloc[-1]
+    )
+except Exception as e:
+    print(f"Error processing {symbol}: {e}")
+    return None
+
     near_high = df["Close"].iloc[-1] >= 0.95*df["High20max"].iloc[-1]
     pole = (df["Close"].pct_change(5).iloc[-6:-1] > 0.08).any()
     base = df["Close"].iloc[-7:-1].max()/df["Close"].iloc[-7:-1].min() < 1.05
