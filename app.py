@@ -3,7 +3,7 @@ import pandas as pd
 import yfinance as yf
 from datetime import datetime
 
-st.set_page_config(page_title="Stock Breakout Scanner", layout="wide")
+st.set_page_config(page_title="Stock Breakout + Fundamental Scanner", layout="wide")
 
 # ------------------- Data Fetching -------------------
 def fetch_price_data(symbol, start="2024-01-01"):
@@ -45,10 +45,13 @@ def analyze_stock(symbol):
     return None
 
 # ------------------- UI -------------------
-st.title("📈 Fundamentals + Breakout Stock Scanner")
+st.title("📈 Fundamental + Breakout Stock Scanner")
 st.sidebar.header("Scanner Settings")
 
-input_method = st.sidebar.selectbox("Select Stock Universe", ["Manual Input", "Upload CSV"])
+input_method = st.sidebar.selectbox("Select Stock Universe", ["Manual Input", "Upload Screener CSV"])
+
+tickers = []
+dataframe_fundamentals = pd.DataFrame()
 
 if input_method == "Manual Input":
     tickers_input = st.sidebar.text_area("Manual NSE Tickers (comma-separated)",
@@ -56,11 +59,11 @@ if input_method == "Manual Input":
     tickers = [x.strip() for x in tickers_input.split(",") if x.strip()]
 else:
     uploaded_file = st.sidebar.file_uploader("Upload Screener.in Export CSV", type="csv")
-    tickers = []
     if uploaded_file:
         try:
-            df_csv = pd.read_csv(uploaded_file)
-            tickers = df_csv.iloc[:, 0].astype(str).tolist()
+            dataframe_fundamentals = pd.read_csv(uploaded_file)
+            if 'Name' in dataframe_fundamentals.columns:
+                tickers = dataframe_fundamentals['Name'].astype(str).apply(lambda x: x + ".NS").tolist()
         except Exception as e:
             st.error(f"CSV Upload Error: {e}")
 
@@ -69,16 +72,35 @@ start_date = st.sidebar.text_input("Start Date", value="2024/01/01")
 if st.sidebar.button("Scan Stocks"):
     st.info("🔍 Scanning stocks...")
     results = []
-    for sym in tickers:
+
+    for i, sym in enumerate(tickers):
+        if not sym.endswith(".NS"):
+            sym += ".NS"
+
+        # Fundamental filter check
+        if not dataframe_fundamentals.empty:
+            row = dataframe_fundamentals.iloc[i]
+            try:
+                roce = float(str(row.get("ROCE", 0)).replace("%", ""))
+                eps = float(str(row.get("EPS last year", 0)))
+                debt = float(str(row.get("Debt to equity", 0)))
+                profit_growth = float(str(row.get("Profit growth", 0)).replace("%", ""))
+
+                if roce < 15 or eps < 10 or debt > 1 or profit_growth < 10:
+                    continue
+            except:
+                continue
+
         result = analyze_stock(sym)
         if result:
             results.append(result)
 
     if results:
-        st.success(f"✅ {len(results)} breakout stock(s) found!")
+        st.success(f"✅ {len(results)} fundamentally strong breakout stock(s) found!")
         st.write(results)
     else:
-        st.warning("No breakout stocks found. Try other tickers or adjust date.")
+        st.warning("No matching stocks found. Try different filters or dates.")
 
 st.markdown("---")
-st.caption("Built with 💹 Streamlit | For educational use only")
+st.caption("Built with 💹 Streamlit | Educational use only")
+
